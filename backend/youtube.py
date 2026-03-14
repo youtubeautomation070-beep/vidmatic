@@ -66,15 +66,26 @@ async def start_oauth(req: OAuthStartRequest, user: User = Depends(get_current_u
     return {"authorization_url": authorization_url, "state": state}
 
 @youtube_router.get("/oauth/callback")
-async def oauth_callback(code: str, state: str = None, request: Request = None):
+async def oauth_callback(code: str, state: str = None, error: str = None, request: Request = None):
     """Handle YouTube OAuth callback (GET request from Google)"""
-    # Get redirect URI from environment or request
-    redirect_uri = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001') + '/api/youtube/oauth/callback'
+    # Handle OAuth errors from Google
+    if error:
+        from fastapi.responses import RedirectResponse
+        frontend_url = 'https://video-wizard-dev.preview.emergentagent.com'
+        return RedirectResponse(url=f"{frontend_url}/dashboard?youtube_error={error}")
+    
+    if not code:
+        from fastapi.responses import RedirectResponse
+        frontend_url = 'https://video-wizard-dev.preview.emergentagent.com'
+        return RedirectResponse(url=f"{frontend_url}/dashboard?youtube_error=no_code_received")
+    
+    # Get redirect URI - must match exactly what was sent to Google
+    redirect_uri = 'https://video-wizard-dev.preview.emergentagent.com/api/youtube/oauth/callback'
     
     client_config = {
         "web": {
-            "client_id": os.environ.get('YOUTUBE_CLIENT_ID', 'your_youtube_client_id'),
-            "client_secret": os.environ.get('YOUTUBE_CLIENT_SECRET', 'your_youtube_client_secret'),
+            "client_id": os.environ.get('YOUTUBE_CLIENT_ID'),
+            "client_secret": os.environ.get('YOUTUBE_CLIENT_SECRET'),
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "redirect_uris": [redirect_uri]
@@ -91,8 +102,15 @@ async def oauth_callback(code: str, state: str = None, request: Request = None):
         redirect_uri=redirect_uri
     )
     
-    flow.fetch_token(code=code)
-    credentials = flow.credentials
+    try:
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+    except Exception as e:
+        # Redirect back with error
+        from fastapi.responses import RedirectResponse
+        frontend_url = 'https://video-wizard-dev.preview.emergentagent.com'
+        error_msg = str(e).replace(' ', '_')
+        return RedirectResponse(url=f"{frontend_url}/dashboard?youtube_error={error_msg[:100]}")
     
     # Get channel info
     try:
