@@ -66,13 +66,17 @@ const Dashboard = () => {
   };
   
   const handleConnectChannel = () => {
-    const redirectUri = `${window.location.origin}/dashboard`;
+    // Construct the correct OAuth callback URL
+    const backendUrl = process.env.REACT_APP_BACKEND_URL;
+    const redirectUri = `${backendUrl}/api/youtube/oauth/callback`;
+    
     api.post('/youtube/oauth/start', { redirect_uri: redirectUri })
       .then(response => {
         window.location.href = response.data.authorization_url;
       })
       .catch(error => {
         toast.error('Failed to start YouTube connection');
+        console.error('YouTube OAuth error:', error);
       });
   };
   
